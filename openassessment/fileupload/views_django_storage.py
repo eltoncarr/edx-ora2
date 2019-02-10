@@ -10,9 +10,9 @@ from .backends.django_storage import Backend
 
 @login_required()
 @require_http_methods(["PUT"])
-def django_storage(request, key):
+def django_storage(request, key, content_type):
     """
     Upload files using django storage backend.
     """
-    Backend().upload_file(key, request.body)
+    Backend().upload_file(key, request.body, content_type)
     return HttpResponse()

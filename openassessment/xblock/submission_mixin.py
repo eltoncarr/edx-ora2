@@ -309,7 +309,15 @@ class SubmissionMixin(object):
         try:
             key = self._get_student_item_key(file_num)
             url = file_upload_api.get_upload_url(key, content_type)
-            return {'success': True, 'url': url}
+
+            # 1. The response from reverse_lazy sometimes returns an object for the 'url'
+            # that json.dumps is unable to encode. Therefore, force the conversion here
+            # to string for 'url' value
+
+            # 2. In order to support the azure uploads via django_storages, we need to
+            # explicitly set the content type. In order to do that, we need to pass it along
+            # to the file upload call.
+            return {'success': True, 'url': str(url), 'content_type': content_type}
         except FileUploadError:
             logger.exception("Error retrieving upload URL.")
             return {'success': False, 'msg': self._(u"Error retrieving upload URL.")}

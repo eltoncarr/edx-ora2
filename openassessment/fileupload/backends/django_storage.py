@@ -1,7 +1,7 @@
 import os
 
 from django.core.files.base import ContentFile
-from django.core.files.storage import default_storage
+from django.core.files.storage import default_storage, get_storage_class
 from django.core.urlresolvers import reverse_lazy
 
 from .base import BaseBackend
@@ -11,11 +11,30 @@ class Backend(BaseBackend):
     """
     Manage openassessment student files uploaded using the default django storage settings.
     """
+
+    def __init__(self, ora2_fileupload=None):
+        """
+        Initialize the backend storage class
+        """
+
+        # check if the backend is explicitly set via ORA2_FILEUPLOAD_BACKEND_STORAGE_CLASS
+        # or fallback to default_storage
+        backend_storage = default_storage
+        expires = False
+
+        # dynamically initialize the backend (if specified)
+        if ora2_fileupload['STORAGE_CLASS']:
+            # when  expires == True, additional settings are needed (expiry duration, etc)
+            expires = ora2_fileupload['STORAGE_KWARGS']['expires']
+            backend_storage = get_storage_class(
+                ora2_storagora2_fileuploade_settings['STORAGE_CLASS'])(
+                    ora2_fileupload['STORAGE_KWARGS'])
+
     def get_upload_url(self, key, content_type):
         """
         Return the URL pointing to the ORA2 django storage upload endpoint.
         """
-        return reverse_lazy("openassessment-django-storage", kwargs={'key': key})
+        return reverse_lazy("openassessment-django-storage", kwargs={'key': key, 'content_type': self._encode_content_type(content_type)})
 
     def get_download_url(self, key):
         """
@@ -25,15 +44,22 @@ class Backend(BaseBackend):
         """
         path = self._get_file_path(key)
         if default_storage.exists(path):
-            return default_storage.url(path)
+            return self.backend_storage.url(path, self.expires)
         return None
 
-    def upload_file(self, key, content):
+    def upload_file(self, key, content, content_type):
         """
         Upload the given file content to the keyed location.
         """
         path = self._get_file_path(key)
-        saved_path = default_storage.save(path, ContentFile(content))
+
+        # Azure defaults to application/octet-stream for blob. When content type is 
+        # not explicitly set, the blob download link fails to open the file since the browser
+        # cannot load application/octet-stream. Therefore, explicitly set the content type 
+        # to the ContentFile object
+        uploaded_file = ContentFile(content)
+        uploaded_file.content_type = self._decode_content_type(filename)
+        saved_path = self.backend_storage.save(path, ContentFile(content))
         return saved_path
 
     def remove_file(self, key):
@@ -44,10 +70,28 @@ class Backend(BaseBackend):
         Returns False if the file does not exist, and so was not removed.
         """
         path = self._get_file_path(key)
-        if default_storage.exists(path):
-            default_storage.delete(path)
+        if self.backend_storage.exists(path):
+            self.backend_storage.delete(path)
             return True
         return False
+
+    def _encode_content_type(self, content_type):
+        """
+        Replace the content type separator with a placeholder
+
+        Returns the encoded string
+        """
+
+        return content_type.replace("/", "__")
+
+    def _decode_content_type(self, content_type):
+        """
+        Replace the content type placeholder with its original separator
+
+        Returns the decoded string
+        """
+
+        return content_type.replace("__", "/")
 
     def _get_file_name(self, key):
         """

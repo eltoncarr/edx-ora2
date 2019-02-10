@@ -16,6 +16,7 @@ def get_backend():
     elif backend_setting == "swift":
         return swift.Backend()
     elif backend_setting == "django":
-        return django_storage.Backend()
+        ora2_fileupload = getattr(settings, "ORA2_FILEUPLOAD", None)
+        return django_storage.Backend(ora2_fileupload)
     else:
         raise ValueError("Invalid ORA2_FILEUPLOAD_BACKEND setting value: %s" % backend_setting)
