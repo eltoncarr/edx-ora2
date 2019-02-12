@@ -12,23 +12,25 @@ class Backend(BaseBackend):
     Manage openassessment student files uploaded using the default django storage settings.
     """
 
+    # setup default backend storage provider as fallback if necessary
+    backend_storage = default_storage
+
+    # tracks if generated urls need to be expired
+    expires = False
+
     def __init__(self, ora2_fileupload=None):
         """
-        Initialize the backend storage class
+        Initialize the backend storage class (if necessary)
         """
 
-        # check if the backend is explicitly set via ORA2_FILEUPLOAD_BACKEND_STORAGE_CLASS
-        # or fallback to default_storage
-        backend_storage = default_storage
-        expires = False
-
-        # dynamically initialize the backend (if specified)
-        if ora2_fileupload['STORAGE_CLASS']:
-            # when  expires == True, additional settings are needed (expiry duration, etc)
+        # dynamically initialize the backend
+        if 'STORAGE_CLASS' in ora2_fileupload and ora2_fileupload['STORAGE_CLASS']:
             expires = ora2_fileupload['STORAGE_KWARGS']['expires']
-            backend_storage = get_storage_class(
-                ora2_storagora2_fileuploade_settings['STORAGE_CLASS'])(
-                    ora2_fileupload['STORAGE_KWARGS'])
+            storage_kwargs = ora2_fileupload['STORAGE_KWARGS']
+
+            # get the backend provider & initialize it with override settings
+            django_storages_backend_provider = get_storage_class(ora2_fileupload['STORAGE_CLASS'])
+            self.backend_storage = django_storages_backend_provider(**storage_kwargs)
 
     def get_upload_url(self, key, content_type):
         """
@@ -43,7 +45,7 @@ class Backend(BaseBackend):
         Returns None if no file exists at that location.
         """
         path = self._get_file_path(key)
-        if default_storage.exists(path):
+        if self.backend_storage.exists(path):
             return self.backend_storage.url(path, self.expires)
         return None
 
@@ -58,7 +60,7 @@ class Backend(BaseBackend):
         # cannot load application/octet-stream. Therefore, explicitly set the content type 
         # to the ContentFile object
         uploaded_file = ContentFile(content)
-        uploaded_file.content_type = self._decode_content_type(filename)
+        uploaded_file.content_type = self._decode_content_type(content_type)
         saved_path = self.backend_storage.save(path, ContentFile(content))
         return saved_path
 
