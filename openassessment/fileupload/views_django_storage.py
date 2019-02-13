@@ -8,7 +8,7 @@ from django.views.decorators.http import require_http_methods
 # when the django backend is directly loaded from .backends.django_storage, 
 # settings are not propertly initialized. It is therefore better to switch 
 # to get_backend which loads settings and effectly arrives at the same provider.
-from .backend import get_backend
+from .backends import get_backend
 
 @login_required()
 @require_http_methods(["PUT"])
