@@ -27,5 +27,6 @@ script:
 branches:
     only:
       - master
+      - support_contenttype_azure_storage
 after_success:
   coveralls
